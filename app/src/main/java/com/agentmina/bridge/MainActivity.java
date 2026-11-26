@@ -14,7 +14,7 @@ import android.widget.*;
 
 public class MainActivity extends Activity {
 
-    private TextView statusText, screenText;
+    private TextView statusText, screenText, resultText;
 
     private final int BG = Color.rgb(15, 11, 24);
     private final int CARD = Color.rgb(29, 21, 43);
@@ -45,7 +45,7 @@ public class MainActivity extends Activity {
         content.addView(title);
 
         TextView subtitle = new TextView(this);
-        subtitle.setText("ANDROID BRIDGE • v0.2");
+        subtitle.setText("ANDROID BRIDGE • v0.3");
         subtitle.setTextColor(MUTED);
         subtitle.setTextSize(12);
         subtitle.setPadding(0, 4, 0, 24);
@@ -75,7 +75,7 @@ public class MainActivity extends Activity {
 
         addButton(content, "▣ Открыть ibis Paint X", () -> {
             Intent intent = getPackageManager()
-            .getLaunchIntentForPackage("jp.ne.ibis.ibispaintx.app");
+                .getLaunchIntentForPackage("jp.ne.ibis.ibispaintx.app");
 
             if (intent != null) {
                 startActivity(intent);
@@ -85,8 +85,49 @@ public class MainActivity extends Activity {
             }
         });
 
-        addButton(content, "↻ Обновить информацию",
-            this::refreshScreenInfo);
+        addSection(content, "ТЕСТ УПРАВЛЕНИЯ");
+
+        EditText commandInput = new EditText(this);
+        commandInput.setSingleLine(true);
+        commandInput.setHint("Название кнопки на экране");
+        commandInput.setHintTextColor(MUTED);
+        commandInput.setTextColor(WHITE);
+        commandInput.setPadding(14, 12, 14, 12);
+        commandInput.setBackground(round(CARD, 16));
+        content.addView(commandInput);
+
+        addButton(content, "Нажать на элемент", () -> {
+            String text = commandInput.getText().toString().trim();
+
+            if (text.isEmpty()) {
+                Toast.makeText(this, "Введи название элемента",
+                    Toast.LENGTH_SHORT).show();
+                return;
+            }
+
+            boolean success =
+                MinaAccessibilityService.clickText(text);
+
+            showResult(success
+                ? "Команда выполнена"
+                : "Не удалось нажать. Проверь службу и название.");
+        });
+
+        addButton(content, "Тестовый свайп вниз", () -> {
+            boolean success = MinaAccessibilityService.swipe(
+                500, 300, 500, 800, 500
+            );
+
+            showResult(success
+                ? "Свайп отправлен"
+                : "Не удалось выполнить свайп");
+        });
+
+        resultText = new TextView(this);
+        resultText.setTextColor(PURPLE);
+        resultText.setTextSize(14);
+        resultText.setPadding(4, 12, 4, 12);
+        content.addView(resultText);
 
         addSection(content, "ЧТО МИНА ВИДИТ");
 
@@ -98,6 +139,9 @@ public class MainActivity extends Activity {
         infoCard.addView(screenText);
 
         content.addView(infoCard);
+
+        addButton(content, "↻ Обновить информацию",
+            this::refreshScreenInfo);
 
         TextView footer = new TextView(this);
         footer.setText("MINA AI • MADE FOR ANDROID");
@@ -112,6 +156,12 @@ public class MainActivity extends Activity {
         setContentView(root);
 
         refreshScreenInfo();
+    }
+
+    private void showResult(String message) {
+        if (resultText != null) {
+            resultText.setText(message);
+        }
     }
 
     private LinearLayout card() {
@@ -199,4 +249,4 @@ public class MainActivity extends Activity {
         super.onResume();
         refreshScreenInfo();
     }
-}
+        }
