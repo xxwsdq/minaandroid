@@ -2,8 +2,10 @@
 package com.agentmina.bridge;
 
 import android.app.Activity;
+import android.app.AlertDialog;
 import android.os.Bundle;
 import android.content.Intent;
+import android.net.Uri;
 import android.provider.Settings;
 import android.content.SharedPreferences;
 import android.graphics.Color;
@@ -23,11 +25,69 @@ public class MainActivity extends Activity {
     private final int MUTED = Color.rgb(175, 157, 195);
 
     private static final String PREFS = "mina_accessibility";
+    private static final String IBIS_PACKAGE =
+        "jp.ne.ibis.ibispaintx.app";
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        buildInterface();
+        handleCommand(getIntent());
+    }
 
+    @Override
+    protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        setIntent(intent);
+        handleCommand(intent);
+    }
+
+    // Принимаем только заранее разрешённые команды
+    private void handleCommand(Intent intent) {
+        if (intent == null ||
+            !Intent.ACTION_VIEW.equals(intent.getAction())) {
+            return;
+        }
+
+        Uri uri = intent.getData();
+
+        if (uri == null ||
+            !"mina".equals(uri.getScheme()) ||
+            !"launch".equals(uri.getHost())) {
+            return;
+        }
+
+        String action = uri.getQueryParameter("action");
+
+        if ("open_ibis".equals(action)) {
+            new AlertDialog.Builder(this)
+                .setTitle("Команда от Mina")
+                .setMessage("Открыть ibis Paint X?")
+                .setNegativeButton("Отмена", (d, w) -> {
+                    showResult("Команда отменена");
+                })
+                .setPositiveButton("Открыть", (d, w) -> {
+                    openIbis();
+                })
+                .show();
+        } else {
+            showResult("Неизвестная команда");
+        }
+    }
+
+    private void openIbis() {
+        Intent intent = getPackageManager()
+            .getLaunchIntentForPackage(IBIS_PACKAGE);
+
+        if (intent != null) {
+            startActivity(intent);
+            showResult("ibis Paint X запущен");
+        } else {
+            showResult("ibis Paint X не найден");
+        }
+    }
+
+    private void buildInterface() {
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(1);
         root.setPadding(22, 28, 22, 24);
@@ -45,7 +105,7 @@ public class MainActivity extends Activity {
         content.addView(title);
 
         TextView subtitle = new TextView(this);
-        subtitle.setText("ANDROID BRIDGE • v0.3");
+        subtitle.setText("ANDROID BRIDGE • v0.4");
         subtitle.setTextColor(MUTED);
         subtitle.setTextSize(12);
         subtitle.setPadding(0, 4, 0, 24);
@@ -73,17 +133,11 @@ public class MainActivity extends Activity {
                 new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)
             ));
 
-        addButton(content, "▣ Открыть ibis Paint X", () -> {
-            Intent intent = getPackageManager()
-                .getLaunchIntentForPackage("jp.ne.ibis.ibispaintx.app");
+        addButton(content, "▣ Открыть ibis Paint X",
+            this::openIbis);
 
-            if (intent != null) {
-                startActivity(intent);
-            } else {
-                Toast.makeText(this, "Приложение не найдено",
-                    Toast.LENGTH_LONG).show();
-            }
-        });
+        addButton(content, "↻ Обновить информацию",
+            this::refreshScreenInfo);
 
         addSection(content, "ТЕСТ УПРАВЛЕНИЯ");
 
@@ -97,30 +151,45 @@ public class MainActivity extends Activity {
         content.addView(commandInput);
 
         addButton(content, "Нажать на элемент", () -> {
-            String text = commandInput.getText().toString().trim();
+            String text = commandInput.getText()
+                .toString().trim();
 
             if (text.isEmpty()) {
-                Toast.makeText(this, "Введи название элемента",
-                    Toast.LENGTH_SHORT).show();
+                showResult("Введи название элемента");
                 return;
             }
 
-            boolean success =
-                MinaAccessibilityService.clickText(text);
+            new AlertDialog.Builder(this)
+                .setTitle("Подтверждение")
+                .setMessage("Нажать на элемент «" + text + "»?")
+                .setNegativeButton("Отмена", null)
+                .setPositiveButton("Нажать", (d, w) -> {
+                    boolean success =
+                        MinaAccessibilityService.clickText(text);
 
-            showResult(success
-                ? "Команда выполнена"
-                : "Не удалось нажать. Проверь службу и название.");
+                    showResult(success
+                        ? "Нажатие выполнено"
+                        : "Элемент не найден или недоступен");
+                })
+                .show();
         });
 
         addButton(content, "Тестовый свайп вниз", () -> {
-            boolean success = MinaAccessibilityService.swipe(
-                500, 300, 500, 800, 500
-            );
+            new AlertDialog.Builder(this)
+                .setTitle("Подтверждение")
+                .setMessage("Выполнить тестовый свайп?")
+                .setNegativeButton("Отмена", null)
+                .setPositiveButton("Выполнить", (d, w) -> {
+                    boolean success =
+                        MinaAccessibilityService.swipe(
+                            500, 300, 500, 800, 500
+                        );
 
-            showResult(success
-                ? "Свайп отправлен"
-                : "Не удалось выполнить свайп");
+                    showResult(success
+                        ? "Свайп отправлен"
+                        : "Служба недоступна");
+                })
+                .show();
         });
 
         resultText = new TextView(this);
@@ -139,9 +208,6 @@ public class MainActivity extends Activity {
         infoCard.addView(screenText);
 
         content.addView(infoCard);
-
-        addButton(content, "↻ Обновить информацию",
-            this::refreshScreenInfo);
 
         TextView footer = new TextView(this);
         footer.setText("MINA AI • MADE FOR ANDROID");
@@ -162,6 +228,7 @@ public class MainActivity extends Activity {
         if (resultText != null) {
             resultText.setText(message);
         }
+        Toast.makeText(this, message, Toast.LENGTH_SHORT).show();
     }
 
     private LinearLayout card() {
@@ -249,4 +316,4 @@ public class MainActivity extends Activity {
         super.onResume();
         refreshScreenInfo();
     }
-        }
+    }
