@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">Mina Android Bridge</string>
+    <string name="accessibility_description">Mina reads visible interface labels to help you understand the current screen. This version does not perform automatic actions.</string>
+</resources>
