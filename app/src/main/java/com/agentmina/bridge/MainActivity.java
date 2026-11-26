@@ -75,7 +75,7 @@ public class MainActivity extends Activity {
 
         addButton(content, "▣ Открыть ibis Paint X", () -> {
             Intent intent = getPackageManager()
-                .getLaunchIntentForPackage("com.ibispaintx.app");
+            .getLaunchIntentForPackage("jp.ne.ibis.ibispaintx.app");
 
             if (intent != null) {
                 startActivity(intent);
