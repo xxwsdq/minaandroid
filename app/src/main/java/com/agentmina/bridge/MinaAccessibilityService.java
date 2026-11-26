@@ -2,6 +2,8 @@
 package com.agentmina.bridge;
 
 import android.accessibilityservice.AccessibilityService;
+import android.accessibilityservice.GestureDescription;
+import android.graphics.Path;
 import android.view.accessibility.AccessibilityEvent;
 import android.view.accessibility.AccessibilityNodeInfo;
 import android.content.Context;
@@ -14,6 +16,13 @@ import java.util.Set;
 public class MinaAccessibilityService extends AccessibilityService {
 
     private static final String PREFS = "mina_accessibility";
+    private static MinaAccessibilityService instance;
+
+    @Override
+    protected void onServiceConnected() {
+        super.onServiceConnected();
+        instance = this;
+    }
 
     @Override
     public void onAccessibilityEvent(AccessibilityEvent event) {
@@ -34,11 +43,7 @@ public class MinaAccessibilityService extends AccessibilityService {
 
         for (String label : labels) {
             if (count++ >= 35) break;
-
-            if (result.length() > 0) {
-                result.append("\n");
-            }
-
+            if (result.length() > 0) result.append("\n");
             result.append("• ").append(label);
         }
 
@@ -46,10 +51,8 @@ public class MinaAccessibilityService extends AccessibilityService {
             result.append("Видимые подписи не найдены.");
         }
 
-        SharedPreferences prefs =
-            getSharedPreferences(PREFS, MODE_PRIVATE);
-
-        prefs.edit()
+        getSharedPreferences(PREFS, MODE_PRIVATE)
+            .edit()
             .putString("last_package", packageName)
             .putString("last_labels", result.toString())
             .apply();
@@ -60,9 +63,7 @@ public class MinaAccessibilityService extends AccessibilityService {
         Set<String> output,
         int depth
     ) {
-        if (node == null || depth > 12 || output.size() >= 35) {
-            return;
-        }
+        if (node == null || depth > 12 || output.size() >= 35) return;
 
         addLabel(output, node.getText());
         addLabel(output, node.getContentDescription());
@@ -89,6 +90,94 @@ public class MinaAccessibilityService extends AccessibilityService {
         }
     }
 
+    // Нажатие на элемент по названию
+    public static boolean clickText(String text) {
+        if (instance == null || text == null) return false;
+
+        AccessibilityNodeInfo root =
+            instance.getRootInActiveWindow();
+
+        if (root == null) return false;
+
+        boolean result = instance.findAndClick(root, text);
+        root.recycle();
+
+        return result;
+    }
+
+    private boolean findAndClick(
+        AccessibilityNodeInfo node,
+        String text
+    ) {
+        if (node == null) return false;
+
+        CharSequence label = node.getText();
+        CharSequence description = node.getContentDescription();
+
+        boolean matches =
+            (label != null && label.toString().equalsIgnoreCase(text)) ||
+            (description != null &&
+             description.toString().equalsIgnoreCase(text));
+
+        if (matches) {
+            if (node.isClickable() &&
+                node.performAction(AccessibilityNodeInfo.ACTION_CLICK)) {
+                return true;
+            }
+
+            AccessibilityNodeInfo parent = node.getParent();
+
+            if (parent != null) {
+                boolean clicked = parent.isClickable() &&
+                    parent.performAction(
+                        AccessibilityNodeInfo.ACTION_CLICK
+                    );
+                parent.recycle();
+
+                if (clicked) return true;
+            }
+        }
+
+        for (int i = 0; i < node.getChildCount(); i++) {
+            AccessibilityNodeInfo child = node.getChild(i);
+
+            if (child != null) {
+                boolean result = findAndClick(child, text);
+                child.recycle();
+
+                if (result) return true;
+            }
+        }
+
+        return false;
+    }
+
+    // Свайп по экрану
+    public static boolean swipe(
+        float x1, float y1,
+        float x2, float y2,
+        long duration
+    ) {
+        if (instance == null) return false;
+
+        Path path = new Path();
+        path.moveTo(x1, y1);
+        path.lineTo(x2, y2);
+
+        GestureDescription.Builder builder =
+            new GestureDescription.Builder();
+
+        builder.addStroke(
+            new GestureDescription.StrokeDescription(
+                path, 0, duration
+            )
+        );
+
+        return instance.dispatchGesture(
+            builder.build(), null, null
+        );
+    }
+
     public static boolean isEnabled(Context context) {
         String enabled = Settings.Secure.getString(
             context.getContentResolver(),
@@ -108,4 +197,10 @@ public class MinaAccessibilityService extends AccessibilityService {
     @Override
     public void onInterrupt() {
     }
+
+    @Override
+    public void onDestroy() {
+        instance = null;
+        super.onDestroy();
     }
+                          }
