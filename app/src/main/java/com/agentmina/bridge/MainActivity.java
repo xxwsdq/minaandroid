@@ -26,7 +26,7 @@ public class MainActivity extends Activity {
 
     private static final String PREFS = "mina_accessibility";
     private static final String IBIS_PACKAGE =
-        "jp.ne.ibis.ibispaintx.app";
+            "jp.ne.ibis.ibispaintx.app";
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -42,42 +42,94 @@ public class MainActivity extends Activity {
         handleCommand(intent);
     }
 
-    // Принимаем только заранее разрешённые команды
     private void handleCommand(Intent intent) {
         if (intent == null ||
-            !Intent.ACTION_VIEW.equals(intent.getAction())) {
+                !Intent.ACTION_VIEW.equals(intent.getAction())) {
             return;
         }
 
         Uri uri = intent.getData();
 
         if (uri == null ||
-            !"mina".equals(uri.getScheme()) ||
-            !"launch".equals(uri.getHost())) {
+                !"mina".equals(uri.getScheme()) ||
+                !"launch".equals(uri.getHost())) {
             return;
         }
 
         String action = uri.getQueryParameter("action");
 
-        if ("open_ibis".equals(action)) {
-            new AlertDialog.Builder(this)
-                .setTitle("Команда от Mina")
-                .setMessage("Открыть ibis Paint X?")
-                .setNegativeButton("Отмена", (d, w) -> {
-                    showResult("Команда отменена");
-                })
-                .setPositiveButton("Открыть", (d, w) -> {
-                    openIbis();
-                })
-                .show();
-        } else {
-            showResult("Неизвестная команда");
+        if (action == null) return;
+
+        switch (action) {
+            case "open_ibis":
+                confirm("Открыть ibis Paint X?",
+                        this::openIbis);
+                break;
+
+            case "read_screen":
+                refreshScreenInfo();
+                showResult("Информация об экране обновлена");
+                break;
+
+            case "click_text":
+                String clickTarget =
+                        uri.getQueryParameter("text");
+
+                if (clickTarget != null) {
+                    confirm(
+                            "Нажать на элемент «" +
+                                    clickTarget + "»?",
+                            () -> executeClick(clickTarget)
+                    );
+                }
+                break;
+
+            case "type_text":
+                String inputText =
+                        uri.getQueryParameter("text");
+
+                if (inputText != null) {
+                    confirm(
+                            "Ввести следующий текст?\n\n" +
+                                    inputText,
+                            () -> executeType(inputText)
+                    );
+                }
+                break;
+
+            case "swipe_down":
+                confirm(
+                        "Выполнить прокрутку экрана вниз?",
+                        this::executeSwipe
+                );
+                break;
+
+            case "press_back":
+                confirm(
+                        "Вернуться на предыдущий экран?",
+                        this::executeBack
+                );
+                break;
+
+            default:
+                showResult("Неизвестная команда");
         }
+    }
+
+    private void confirm(String message, Runnable action) {
+        new AlertDialog.Builder(this)
+                .setTitle("Команда от Mina")
+                .setMessage(message)
+                .setNegativeButton("Отмена",
+                        (d, w) -> showResult("Команда отменена"))
+                .setPositiveButton("Разрешить",
+                        (d, w) -> action.run())
+                .show();
     }
 
     private void openIbis() {
         Intent intent = getPackageManager()
-            .getLaunchIntentForPackage(IBIS_PACKAGE);
+                .getLaunchIntentForPackage(IBIS_PACKAGE);
 
         if (intent != null) {
             startActivity(intent);
@@ -85,6 +137,53 @@ public class MainActivity extends Activity {
         } else {
             showResult("ibis Paint X не найден");
         }
+    }
+
+    private void executeClick(String text) {
+        boolean success =
+                MinaAccessibilityService.clickContains(text);
+
+        showResult(success
+                ? "Элемент нажат: " + text
+                : "Не удалось найти элемент: " + text);
+
+        refreshScreenInfo();
+    }
+
+    private void executeType(String text) {
+        boolean success =
+                MinaAccessibilityService.typeText(text);
+
+        showResult(success
+                ? "Текст введён"
+                : "Не найдено доступное поле ввода");
+
+        refreshScreenInfo();
+    }
+
+    private void executeSwipe() {
+        boolean success = MinaAccessibilityService.swipe(
+                0.5f, 0.30f,
+                0.5f, 0.75f,
+                500
+        );
+
+        showResult(success
+                ? "Прокрутка отправлена"
+                : "Служба недоступна");
+
+        refreshScreenInfo();
+    }
+
+    private void executeBack() {
+        boolean success =
+                MinaAccessibilityService.pressBack();
+
+        showResult(success
+                ? "Возврат выполнен"
+                : "Не удалось выполнить возврат");
+
+        refreshScreenInfo();
     }
 
     private void buildInterface() {
@@ -105,7 +204,7 @@ public class MainActivity extends Activity {
         content.addView(title);
 
         TextView subtitle = new TextView(this);
-        subtitle.setText("ANDROID BRIDGE • v0.4");
+        subtitle.setText("ANDROID BRIDGE • v0.8");
         subtitle.setTextColor(MUTED);
         subtitle.setTextSize(12);
         subtitle.setPadding(0, 4, 0, 24);
@@ -129,68 +228,84 @@ public class MainActivity extends Activity {
         addSection(content, "УПРАВЛЕНИЕ");
 
         addButton(content, "◈ Включить Accessibility Service",
-            () -> startActivity(
-                new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)
-            ));
+                () -> startActivity(
+                        new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)
+                ));
 
         addButton(content, "▣ Открыть ibis Paint X",
-            this::openIbis);
+                this::openIbis);
 
         addButton(content, "↻ Обновить информацию",
-            this::refreshScreenInfo);
+                this::refreshScreenInfo);
 
-        addSection(content, "ТЕСТ УПРАВЛЕНИЯ");
+        addSection(content, "ВОЗМОЖНОСТИ МИНЫ");
+
+        addButton(content, "◉ Прочитать текущий экран", () -> {
+            String result =
+                    MinaAccessibilityService.getScreenText();
+
+            screenText.setText(
+                    result.isEmpty()
+                            ? "Не удалось прочитать экран"
+                            : result
+            );
+
+            showResult("Экран прочитан");
+        });
 
         EditText commandInput = new EditText(this);
         commandInput.setSingleLine(true);
-        commandInput.setHint("Название кнопки на экране");
+        commandInput.setHint("Название элемента на экране");
         commandInput.setHintTextColor(MUTED);
         commandInput.setTextColor(WHITE);
         commandInput.setPadding(14, 12, 14, 12);
         commandInput.setBackground(round(CARD, 16));
         content.addView(commandInput);
 
-        addButton(content, "Нажать на элемент", () -> {
+        addButton(content, "◈ Нажать на элемент", () -> {
             String text = commandInput.getText()
-                .toString().trim();
+                    .toString().trim();
 
             if (text.isEmpty()) {
                 showResult("Введи название элемента");
                 return;
             }
 
-            new AlertDialog.Builder(this)
-                .setTitle("Подтверждение")
-                .setMessage("Нажать на элемент «" + text + "»?")
-                .setNegativeButton("Отмена", null)
-                .setPositiveButton("Нажать", (d, w) -> {
-                    boolean success =
-                        MinaAccessibilityService.clickText(text);
-
-                    showResult(success
-                        ? "Нажатие выполнено"
-                        : "Элемент не найден или недоступен");
-                })
-                .show();
+            confirm("Нажать на элемент «" + text + "»?",
+                    () -> executeClick(text));
         });
 
-        addButton(content, "Тестовый свайп вниз", () -> {
-            new AlertDialog.Builder(this)
-                .setTitle("Подтверждение")
-                .setMessage("Выполнить тестовый свайп?")
-                .setNegativeButton("Отмена", null)
-                .setPositiveButton("Выполнить", (d, w) -> {
-                    boolean success =
-                        MinaAccessibilityService.swipe(
-                            500, 300, 500, 800, 500
-                        );
+        EditText textInput = new EditText(this);
+        textInput.setSingleLine(false);
+        textInput.setHint("Текст для ввода");
+        textInput.setHintTextColor(MUTED);
+        textInput.setTextColor(WHITE);
+        textInput.setPadding(14, 12, 14, 12);
+        textInput.setBackground(round(CARD, 16));
+        content.addView(textInput);
 
-                    showResult(success
-                        ? "Свайп отправлен"
-                        : "Служба недоступна");
-                })
-                .show();
+        addButton(content, "⌨ Ввести текст", () -> {
+            String text = textInput.getText()
+                    .toString();
+
+            if (text.trim().isEmpty()) {
+                showResult("Введи текст");
+                return;
+            }
+
+            confirm("Ввести текст?\n\n" + text,
+                    () -> executeType(text));
         });
+
+        addButton(content, "↓ Прокрутить экран", () ->
+                confirm("Выполнить прокрутку?",
+                        this::executeSwipe));
+
+        addButton(content, "↶ Назад", () ->
+                confirm("Вернуться назад?",
+                        this::executeBack));
+
+        addSection(content, "РЕЗУЛЬТАТ");
 
         resultText = new TextView(this);
         resultText.setTextColor(PURPLE);
@@ -228,6 +343,7 @@ public class MainActivity extends Activity {
         if (resultText != null) {
             resultText.setText(message);
         }
+
         Toast.makeText(this, message, Toast.LENGTH_SHORT).show();
     }
 
@@ -238,14 +354,18 @@ public class MainActivity extends Activity {
         box.setBackground(round(CARD, 22));
 
         LinearLayout.LayoutParams params =
-            new LinearLayout.LayoutParams(-1, -2);
+                new LinearLayout.LayoutParams(-1, -2);
+
         params.bottomMargin = 16;
         box.setLayoutParams(params);
 
         return box;
     }
 
-    private void addSection(LinearLayout parent, String text) {
+    private void addSection(
+            LinearLayout parent,
+            String text
+    ) {
         TextView label = new TextView(this);
         label.setText(text);
         label.setTextColor(PURPLE);
@@ -256,7 +376,9 @@ public class MainActivity extends Activity {
     }
 
     private void addButton(
-        LinearLayout parent, String text, Runnable action
+            LinearLayout parent,
+            String text,
+            Runnable action
     ) {
         Button button = new Button(this);
         button.setText(text);
@@ -264,50 +386,67 @@ public class MainActivity extends Activity {
         button.setTextSize(14);
         button.setAllCaps(false);
         button.setBackground(round(
-            Color.rgb(55, 35, 80), 18
+                Color.rgb(55, 35, 80), 18
         ));
 
         LinearLayout.LayoutParams params =
-            new LinearLayout.LayoutParams(-1, -2);
+                new LinearLayout.LayoutParams(-1, -2);
+
         params.bottomMargin = 10;
 
         parent.addView(button, params);
         button.setOnClickListener(v -> action.run());
     }
 
-    private GradientDrawable round(int color, int radius) {
-        GradientDrawable drawable = new GradientDrawable();
+    private GradientDrawable round(
+            int color,
+            int radius
+    ) {
+        GradientDrawable drawable =
+                new GradientDrawable();
+
         drawable.setColor(color);
         drawable.setCornerRadius(
-            radius * getResources().getDisplayMetrics().density
+                radius * getResources()
+                        .getDisplayMetrics().density
         );
-        drawable.setStroke(1, Color.rgb(91, 61, 125));
+
+        drawable.setStroke(
+                1,
+                Color.rgb(91, 61, 125)
+        );
+
         return drawable;
     }
 
     private void refreshScreenInfo() {
         if (statusText == null || screenText == null) return;
 
+        boolean enabled =
+                MinaAccessibilityService.isEnabled(this);
+
         statusText.setText(
-            MinaAccessibilityService.isEnabled(this)
-                ? "● Служба включена"
-                : "○ Служба выключена"
+                enabled
+                        ? "● Служба включена"
+                        : "○ Служба выключена"
         );
 
         SharedPreferences prefs =
-            getSharedPreferences(PREFS, MODE_PRIVATE);
+                getSharedPreferences(PREFS, MODE_PRIVATE);
 
         String app = prefs.getString(
-            "last_package", "Пока нет данных"
+                "last_package",
+                "Пока нет данных"
         );
 
         String labels = prefs.getString(
-            "last_labels", "Открой ibis Paint X."
+                "last_labels",
+                "Открой ibis Paint X."
         );
 
         screenText.setText(
-            "Приложение:\n" + app +
-            "\n\nНайденные элементы:\n" + labels
+                "Приложение:\n" + app +
+                        "\n\nНайденные элементы:\n" + labels
         );
     }
 
@@ -316,4 +455,4 @@ public class MainActivity extends Activity {
         super.onResume();
         refreshScreenInfo();
     }
-    }
+            }
