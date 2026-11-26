@@ -7,7 +7,6 @@ import android.graphics.Path;
 import android.view.accessibility.AccessibilityEvent;
 import android.view.accessibility.AccessibilityNodeInfo;
 import android.content.Context;
-import android.content.SharedPreferences;
 import android.provider.Settings;
 
 import java.util.LinkedHashSet;
@@ -152,7 +151,7 @@ public class MinaAccessibilityService extends AccessibilityService {
         return false;
     }
 
-    // Свайп по экрану
+    // Адаптивный свайп по экрану
     public static boolean swipe(
         float x1, float y1,
         float x2, float y2,
@@ -160,16 +159,24 @@ public class MinaAccessibilityService extends AccessibilityService {
     ) {
         if (instance == null) return false;
 
+        android.util.DisplayMetrics metrics =
+            instance.getResources().getDisplayMetrics();
+
+        float startX = metrics.widthPixels / 2f;
+        float startY = metrics.heightPixels * 0.30f;
+        float endX = metrics.widthPixels / 2f;
+        float endY = metrics.heightPixels * 0.75f;
+
         Path path = new Path();
-        path.moveTo(x1, y1);
-        path.lineTo(x2, y2);
+        path.moveTo(startX, startY);
+        path.lineTo(endX, endY);
 
         GestureDescription.Builder builder =
             new GestureDescription.Builder();
 
         builder.addStroke(
             new GestureDescription.StrokeDescription(
-                path, 0, duration
+                path, 0, Math.max(300, duration)
             )
         );
 
@@ -200,7 +207,9 @@ public class MinaAccessibilityService extends AccessibilityService {
 
     @Override
     public void onDestroy() {
-        instance = null;
+        if (instance == this) {
+            instance = null;
+        }
         super.onDestroy();
     }
-                          }
+}
