@@ -1,210 +1,111 @@
 
 package com.agentmina.bridge;
 
-import android.app.Activity;
-import android.os.Bundle;
-import android.content.Intent;
-import android.provider.Settings;
+import android.accessibilityservice.AccessibilityService;
+import android.view.accessibility.AccessibilityEvent;
+import android.view.accessibility.AccessibilityNodeInfo;
+import android.content.Context;
 import android.content.SharedPreferences;
-import android.graphics.Color;
-import android.graphics.Typeface;
-import android.graphics.drawable.GradientDrawable;
-import android.view.Gravity;
-import android.widget.*;
-import android.view.View;
+import android.provider.Settings;
 
-public class MainActivity extends Activity {
+import java.util.LinkedHashSet;
+import java.util.Set;
 
-    private TextView statusText;
-    private TextView screenText;
-
-    private final int BG = Color.rgb(15, 11, 24);
-    private final int CARD = Color.rgb(29, 21, 43);
-    private final int PURPLE = Color.rgb(170, 105, 255);
-    private final int WHITE = Color.rgb(245, 239, 255);
-    private final int MUTED = Color.rgb(175, 157, 195);
+public class MinaAccessibilityService extends AccessibilityService {
 
     private static final String PREFS = "mina_accessibility";
 
     @Override
-    protected void onCreate(Bundle savedInstanceState) {
-        super.onCreate(savedInstanceState);
+    public void onAccessibilityEvent(AccessibilityEvent event) {
+        if (event == null || event.getPackageName() == null) return;
 
-        LinearLayout root = new LinearLayout(this);
-        root.setOrientation(LinearLayout.VERTICAL);
-        root.setPadding(22, 28, 22, 24);
-        root.setBackgroundColor(BG);
+        String packageName = event.getPackageName().toString();
+        Set<String> labels = new LinkedHashSet<>();
 
-        ScrollView scroll = new ScrollView(this);
-        LinearLayout content = new LinearLayout(this);
-        content.setOrientation(LinearLayout.VERTICAL);
+        AccessibilityNodeInfo root = getRootInActiveWindow();
 
-        TextView title = new TextView(this);
-        title.setText("✦ MINA");
-        title.setTextSize(32);
-        title.setTextColor(PURPLE);
-        title.setTypeface(null, Typeface.BOLD);
-        content.addView(title);
+        if (root != null) {
+            collectLabels(root, labels, 0);
+            root.recycle();
+        }
 
-        TextView subtitle = new TextView(this);
-        subtitle.setText("ANDROID BRIDGE  •  v0.2");
-        subtitle.setTextColor(MUTED);
-        subtitle.setTextSize(12);
-        subtitle.setPadding(0, 4, 0, 24);
-        content.addView(subtitle);
+        StringBuilder result = new StringBuilder();
+        int count = 0;
 
-        LinearLayout statusCard = card();
+        for (String label : labels) {
+            if (count++ >= 35) break;
 
-        TextView statusTitle = new TextView(this);
-        statusTitle.setText("СОСТОЯНИЕ МИНЫ");
-        statusTitle.setTextColor(MUTED);
-        statusTitle.setTextSize(12);
-        statusCard.addView(statusTitle);
+            if (result.length() > 0) {
+                result.append("\n");
+            }
 
-        statusText = new TextView(this);
-        statusText.setTextSize(17);
-        statusText.setTextColor(WHITE);
-        statusText.setPadding(0, 12, 0, 4);
-        statusCard.addView(statusText);
+            result.append("• ").append(label);
+        }
 
-        content.addView(statusCard);
-
-        addSection(content, "УПРАВЛЕНИЕ");
-
-        addButton(content, "◈  Включить Accessibility Service",
-            () -> startActivity(
-                new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)
-            ));
-
-        addButton(content, "▣  Открыть ibis Paint X",
-            () -> {
-                Intent intent = getPackageManager()
-                    .getLaunchIntentForPackage("com.ibispaintx.app");
-
-                if (intent != null) {
-                    startActivity(intent);
-                } else {
-                    Toast.makeText(this,
-                        "Приложение не найдено",
-                        Toast.LENGTH_LONG).show();
-                }
-            });
-
-        addButton(content, "↻  Обновить информацию",
-            this::refreshScreenInfo);
-
-        addSection(content, "ЧТО МИНА ВИДИТ");
-
-        LinearLayout infoCard = card();
-
-        screenText = new TextView(this);
-        screenText.setTextColor(WHITE);
-        screenText.setTextSize(14);
-        screenText.setText("Загрузка...");
-        infoCard.addView(screenText);
-
-        content.addView(infoCard);
-
-        TextView footer = new TextView(this);
-        footer.setText("MINA AI  •  MADE FOR ANDROID");
-        footer.setTextColor(MUTED);
-        footer.setGravity(Gravity.CENTER);
-        footer.setTextSize(10);
-        footer.setPadding(0, 28, 0, 10);
-        content.addView(footer);
-
-        scroll.addView(content);
-        root.addView(scroll);
-
-        setContentView(root);
-        refreshScreenInfo();
-    }
-
-    private LinearLayout card() {
-        LinearLayout box = new LinearLayout(this);
-        box.setOrientation(LinearLayout.VERTICAL);
-        box.setPadding(18, 18, 18, 18);
-        box.setBackground(round(CARD, 22));
-        LinearLayout.LayoutParams params =
-            new LinearLayout.LayoutParams(-1, -2);
-        params.bottomMargin = 16;
-        box.setLayoutParams(params);
-        return box;
-    }
-
-    private void addSection(LinearLayout parent, String text) {
-        TextView label = new TextView(this);
-        label.setText(text);
-        label.setTextColor(PURPLE);
-        label.setTextSize(12);
-        label.setTypeface(null, Typeface.BOLD);
-        label.setPadding(4, 18, 4, 12);
-        parent.addView(label);
-    }
-
-    private void addButton(
-        LinearLayout parent,
-        String text,
-        Runnable action
-    ) {
-        Button button = new Button(this);
-        button.setText(text);
-        button.setTextColor(WHITE);
-        button.setTextSize(14);
-        button.setAllCaps(false);
-        button.setBackground(round(
-            Color.rgb(55, 35, 80), 18
-        ));
-        button.setPadding(12, 12, 12, 12);
-
-        LinearLayout.LayoutParams params =
-            new LinearLayout.LayoutParams(-1, -2);
-        params.bottomMargin = 10;
-        parent.addView(button, params);
-
-        button.setOnClickListener(v -> action.run());
-    }
-
-    private GradientDrawable round(int color, int radius) {
-        GradientDrawable drawable = new GradientDrawable();
-        drawable.setColor(color);
-        drawable.setCornerRadius(radius * getResources()
-            .getDisplayMetrics().density);
-        drawable.setStroke(1,
-            Color.rgb(91, 61, 125));
-        return drawable;
-    }
-
-    private void refreshScreenInfo() {
-        if (statusText == null || screenText == null) return;
-
-        statusText.setText(
-            MinaAccessibilityService.isEnabled(this)
-                ? "●  Служба включена"
-                : "○  Служба выключена"
-        );
+        if (result.length() == 0) {
+            result.append("Видимые подписи не найдены.");
+        }
 
         SharedPreferences prefs =
             getSharedPreferences(PREFS, MODE_PRIVATE);
 
-        String app = prefs.getString(
-            "last_package", "Пока нет данных"
+        prefs.edit()
+            .putString("last_package", packageName)
+            .putString("last_labels", result.toString())
+            .apply();
+    }
+
+    private void collectLabels(
+        AccessibilityNodeInfo node,
+        Set<String> output,
+        int depth
+    ) {
+        if (node == null || depth > 12 || output.size() >= 35) {
+            return;
+        }
+
+        addLabel(output, node.getText());
+        addLabel(output, node.getContentDescription());
+
+        for (int i = 0; i < node.getChildCount(); i++) {
+            if (output.size() >= 35) break;
+
+            AccessibilityNodeInfo child = node.getChild(i);
+
+            if (child != null) {
+                collectLabels(child, output, depth + 1);
+                child.recycle();
+            }
+        }
+    }
+
+    private void addLabel(Set<String> output, CharSequence value) {
+        if (value == null) return;
+
+        String text = value.toString().trim();
+
+        if (!text.isEmpty() && text.length() <= 100) {
+            output.add(text);
+        }
+    }
+
+    public static boolean isEnabled(Context context) {
+        String enabled = Settings.Secure.getString(
+            context.getContentResolver(),
+            Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES
         );
 
-        String labels = prefs.getString(
-            "last_labels",
-            "Открой ibis Paint X и вернись сюда."
-        );
+        if (enabled == null) return false;
 
-        screenText.setText(
-            "Приложение:\n" + app +
-            "\n\nНайденные элементы:\n" + labels
+        String expected = context.getPackageName() + "/" +
+            MinaAccessibilityService.class.getName();
+
+        return enabled.toLowerCase().contains(
+            expected.toLowerCase()
         );
     }
 
     @Override
-    protected void onResume() {
-        super.onResume();
-        refreshScreenInfo();
+    public void onInterrupt() {
     }
 }
